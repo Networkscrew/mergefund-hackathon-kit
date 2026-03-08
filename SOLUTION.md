@@ -1,15 +1,15 @@
-# 🎯 任务 #4：Leaderboard Page（排行榜页面）
+# 🎯 任务 #3：Discovery Algorithm（发现算法）
 
 ## 任务要求
-- **目标：** 构建一个排行榜页面，显示按总收入排序的贡献者
+- **目标：** 为 marketplace 悬赏实现排名算法
 - **要求：**
-  1. 按总收入排序
-  2. 显示完成的悬赏数量
-  3. 显示声望分数
-  4. 响应式表格布局
+  1. 使用提供的模拟数据
+  2. 为每个悬赏打分
+  3. 按分数排序
+  4. 在代码注释中解释评分逻辑
 - **验收标准：**
-  - 排序正确
-  - UI 清晰易读
+  - 列表按分数排序
+  - 分数可见
 
 ---
 
@@ -18,554 +18,490 @@
 ### 1. 类型定义（types.ts）
 
 ```typescript
-export interface Leader {
+export interface Bounty {
   id: string;
-  username: string;
-  avatar?: string;
-  totalEarned: number;
-  bountiesCompleted: number;
-  reputationScore: number;
-  rank: number;
-  country?: string;
-  joinedDate: Date;
-  skills: string[];
-  recentActivity: string[];
+  title: string;
+  description: string;
+  amount: number;
+  currency: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags: string[];
+  createdAt: Date;
+  deadline?: Date;
+  applicantCount: number;
+  repository: string;
+  status: 'open' | 'in_progress' | 'completed';
 }
 
-export interface LeaderboardFilters {
-  country?: string;
-  minEarned?: number;
-  skills?: string[];
+export interface ScoredBounty extends Bounty {
+  score: number;
+  scoreBreakdown: {
+    amountScore: number;
+    difficultyScore: number;
+    urgencyScore: number;
+    popularityScore: number;
+  };
+}
+
+export interface RankingConfig {
+  amountWeight: number;      // 奖金权重
+  difficultyWeight: number;   // 难度权重
+  urgencyWeight: number;      // 紧急度权重
+  popularityWeight: number;   // 热门度权重
 }
 ```
 
-### 2. 模拟数据（mockData.ts）
+### 2. 排名算法（rankingAlgorithm.ts）
 
 ```typescript
-import { Leader } from './types';
-
-export const mockLeaders: Leader[] = [
-  {
-    id: '1',
-    username: 'johndoe',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
-    totalEarned: 15400,
-    bountiesCompleted: 47,
-    reputationScore: 950,
-    rank: 1,
-    country: '🇺🇸',
-    joinedDate: new Date('2025-01-15'),
-    skills: ['React', 'TypeScript', 'Node.js', 'Python'],
-    recentActivity: [
-      'Completed "Build authentication system"',
-      'Started "Optimize database queries"',
-    ],
-  },
-  {
-    id: '2',
-    username: 'janesmith',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jane',
-    totalEarned: 12300,
-    bountiesCompleted: 38,
-    reputationScore: 890,
-    rank: 2,
-    country: '🇬🇧',
-    joinedDate: new Date('2025-02-20'),
-    skills: ['Python', 'Django', 'PostgreSQL', 'Docker'],
-    recentActivity: [
-      'Completed "API integration"',
-      'Mentored 3 new contributors',
-    ],
-  },
-  {
-    id: '3',
-    username: 'devmaster',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dev',
-    totalEarned: 10800,
-    bountiesCompleted: 35,
-    reputationScore: 850,
-    rank: 3,
-    country: '🇩🇪',
-    joinedDate: new Date('2025-03-10'),
-    skills: ['Go', 'Kubernetes', 'AWS', 'Terraform'],
-    recentActivity: [
-      'Completed "CI/CD pipeline setup"',
-      'Reviewed 5 pull requests',
-    ],
-  },
-  {
-    id: '4',
-    username: 'codequeen',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Queen',
-    totalEarned: 9500,
-    bountiesCompleted: 31,
-    reputationScore: 820,
-    rank: 4,
-    country: '🇨🇦',
-    joinedDate: new Date('2025-04-05'),
-    skills: ['React', 'GraphQL', 'MongoDB', 'Figma'],
-    recentActivity: [
-      'Completed "UI/UX redesign"',
-      'Started "Mobile app development"',
-    ],
-  },
-  {
-    id: '5',
-    username: 'hackerman',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Hacker',
-    totalEarned: 8900,
-    bountiesCompleted: 28,
-    reputationScore: 780,
-    rank: 5,
-    country: '🇯🇵',
-    joinedDate: new Date('2025-05-12'),
-    skills: ['Rust', 'WebAssembly', 'Solidity', 'Ethereum'],
-    recentActivity: [
-      'Completed "Smart contract audit"',
-      'Published technical blog post',
-    ],
-  },
-  {
-    id: '6',
-    username: 'webwizard',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Wizard',
-    totalEarned: 8200,
-    bountiesCompleted: 25,
-    reputationScore: 750,
-    rank: 6,
-    country: '🇦🇺',
-    joinedDate: new Date('2025-06-18'),
-    skills: ['Vue.js', 'Nuxt.js', 'Tailwind CSS', 'Firebase'],
-    recentActivity: [
-      'Completed "Landing page optimization"',
-      'Contributed to documentation',
-    ],
-  },
-  {
-    id: '7',
-    username: 'algorithma',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Algo',
-    totalEarned: 7600,
-    bountiesCompleted: 22,
-    reputationScore: 720,
-    rank: 7,
-    country: '🇮🇳',
-    joinedDate: new Date('2025-07-22'),
-    skills: ['Python', 'Machine Learning', 'TensorFlow', 'Pandas'],
-    recentActivity: [
-      'Completed "ML model optimization"',
-      'Started "Data pipeline build"',
-    ],
-  },
-  {
-    id: '8',
-    username: 'bugslayer',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bugs',
-    totalEarned: 6900,
-    bountiesCompleted: 19,
-    reputationScore: 680,
-    rank: 8,
-    country: '🇧🇷',
-    joinedDate: new Date('2025-08-30'),
-    skills: ['Java', 'Spring Boot', 'MySQL', 'Jenkins'],
-    recentActivity: [
-      'Completed "Bug fixing sprint"',
-      'Mentored 2 new contributors',
-    ],
-  },
-  {
-    id: '9',
-    username: 'designpro',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Design',
-    totalEarned: 6200,
-    bountiesCompleted: 16,
-    reputationScore: 650,
-    rank: 9,
-    country: '🇫🇷',
-    joinedDate: new Date('2025-09-15'),
-    skills: ['Figma', 'Adobe XD', 'Sketch', 'Prototyping'],
-    recentActivity: [
-      'Completed "Design system creation"',
-      'Started "Brand identity project"',
-    ],
-  },
-  {
-    id: '10',
-    username: 'ninja_coder',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ninja',
-    totalEarned: 5500,
-    bountiesCompleted: 14,
-    reputationScore: 620,
-    rank: 10,
-    country: '🇰🇷',
-    joinedDate: new Date('2025-10-20'),
-    skills: ['JavaScript', 'React', 'Next.js', 'GraphQL'],
-    recentActivity: [
-      'Completed "Performance optimization"',
-      'Contributed to open source',
-    ],
-  },
-];
-```
-
-### 3. 排序工具（utils.ts）
-
-```typescript
-import { Leader, LeaderboardFilters } from './types';
+import { Bounty, ScoredBounty, RankingConfig } from './types';
 
 /**
- * 按总收入排序贡献者（降序）
+ * 🔍 悬赏发现与排名算法
+ *
+ * 📊 评分逻辑说明：
+ *
+ * 算法根据以下四个维度为每个悬赏计算总分（0-100）：
+ *
+ * 1. 💰 奖金分数（amountScore）：0-25 分
+ *    - 奖金越高，分数越高
+ *    - 使用对数刻度避免巨额奖金主导排名
+ *    - 公式：log10(amount) * 5，上限 25 分
+ *
+ * 2. 🎯 难度分数（difficultyScore）：0-25 分
+ *    - Easy: 5 分（入门级，适合新手）
+ *    - Medium: 15 分（平衡性最好）
+ *    - Hard: 25 分（挑战性高，专家级）
+ *
+ * 3. ⏰ 紧急度分数（urgencyScore）：0-25 分
+ *    - 基于截止日期距离
+ *    - 距截止日期 7 天内：25 分（最紧急）
+ *    - 距截止日期 30 天内：15 分
+ *    - 无截止日期或超过 30 天：5 分
+ *
+ * 4. 🔥 热门度分数（popularityScore）：0-25 分
+ *    - 基于申请人数
+ *    - 申请人越多，说明越热门/有吸引力
+ *    - 公式：min(applicantCount * 2, 25)
+ *
+ * 🎲 默认权重配置：
+ *    - 奖金：30%（amountWeight = 0.3）
+ *    - 难度：25%（difficultyWeight = 0.25）
+ *    - 紧急度：25%（urgencyWeight = 0.25）
+ *    - 热门度：20%（popularityWeight = 0.2）
+ *
+ * 🧮 总分计算：
+ *    score = (amountScore * amountWeight) +
+ *            (difficultyScore * difficultyWeight) +
+ *            (urgencyScore * urgencyWeight) +
+ *            (popularityScore * popularityWeight)
  */
-export function sortByTotalEarned(leaders: Leader[]): Leader[] {
-  return [...leaders].sort((a, b) => b.totalEarned - a.totalEarned);
+
+// 默认权重配置
+const DEFAULT_CONFIG: RankingConfig = {
+  amountWeight: 0.30,      // 30%
+  difficultyWeight: 0.25,   // 25%
+  urgencyWeight: 0.25,      // 25%
+  popularityWeight: 0.20,   // 20%
+};
+
+/**
+ * 计算奖金分数（0-25）
+ * 使用对数刻度：log10(amount) * 5，上限 25 分
+ */
+function calculateAmountScore(amount: number): number {
+  const rawScore = Math.log10(Math.max(amount, 1)) * 5;
+  return Math.min(rawScore, 25);
 }
 
 /**
- * 按完成的悬赏数排序
+ * 计算难度分数（0-25）
  */
-export function sortByBountiesCompleted(leaders: Leader[]): Leader[] {
-  return [...leaders].sort((a, b) => b.bountiesCompleted - a.bountiesCompleted);
+function calculateDifficultyScore(difficulty: string): number {
+  const scores = {
+    easy: 5,
+    medium: 15,
+    hard: 25,
+  };
+  return scores[difficulty as keyof typeof scores] || 10;
 }
 
 /**
- * 按声望分数排序
+ * 计算紧急度分数（0-25）
+ * 基于截止日期距离
  */
-export function sortByReputation(leaders: Leader[]): Leader[] {
-  return [...leaders].sort((a, b) => b.reputationScore - a.reputationScore);
+function calculateUrgencyScore(deadline?: Date): number {
+  if (!deadline) {
+    return 5; // 无截止日期，低紧急度
+  }
+
+  const now = new Date();
+  const daysUntilDeadline = Math.floor((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysUntilDeadline <= 0) {
+    return 0; // 已过期
+  } else if (daysUntilDeadline <= 7) {
+    return 25; // 7 天内，最高紧急度
+  } else if (daysUntilDeadline <= 30) {
+    return 15; // 30 天内，中等紧急度
+  } else {
+    return 5; // 超过 30 天，低紧急度
+  }
 }
 
 /**
- * 更新排名（基于当前排序）
+ * 计算热门度分数（0-25）
+ * 基于申请人数
  */
-export function updateRanks(leaders: Leader[]): Leader[] {
-  return leaders.map((leader, index) => ({
-    ...leader,
-    rank: index + 1,
-  }));
+function calculatePopularityScore(applicantCount: number): number {
+  return Math.min(applicantCount * 2, 25);
 }
 
 /**
- * 过滤贡献者
+ * 🔍 主要排名函数
+ * 输入：悬赏列表 + 可选权重配置
+ * 输出：已排序的带分数悬赏列表
  */
-export function filterLeaders(
-  leaders: Leader[],
-  filters: LeaderboardFilters
-): Leader[] {
-  return leaders.filter((leader) => {
-    if (filters.minEarned && leader.totalEarned < filters.minEarned) {
-      return false;
-    }
-    if (filters.skills && !filters.skills.some((skill) => leader.skills.includes(skill))) {
-      return false;
-    }
+export function rankBounties(
+  bounties: Bounty[],
+  config: RankingConfig = DEFAULT_CONFIG
+): ScoredBounty[] {
+  // 为每个悬赏计算分数
+  const scoredBounties: ScoredBounty[] = bounties.map((bounty) => {
+    // 计算各维度分数
+    const amountScore = calculateAmountScore(bounty.amount);
+    const difficultyScore = calculateDifficultyScore(bounty.difficulty);
+    const urgencyScore = calculateUrgencyScore(bounty.deadline);
+    const popularityScore = calculatePopularityScore(bounty.applicantCount);
+
+    // 计算加权总分
+    const totalScore =
+      (amountScore * config.amountWeight) +
+      (difficultyScore * config.difficultyWeight) +
+      (urgencyScore * config.urgencyWeight) +
+      (popularityScore * config.popularityWeight);
+
+    return {
+      ...bounty,
+      score: Math.round(totalScore * 100) / 100, // 保留两位小数
+      scoreBreakdown: {
+        amountScore: Math.round(amountScore * 100) / 100,
+        difficultyScore: Math.round(difficultyScore * 100) / 100,
+        urgencyScore: Math.round(urgencyScore * 100) / 100,
+        popularityScore: Math.round(popularityScore * 100) / 100,
+      },
+    };
+  });
+
+  // 按分数降序排序
+  return scoredBounties.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * 过滤悬赏
+ */
+export function filterBounties(
+  bounties: Bounty[],
+  filters: {
+    minAmount?: number;
+    maxAmount?: number;
+    difficulty?: string[];
+    tags?: string[];
+    status?: string[];
+  }
+): Bounty[] {
+  return bounties.filter((bounty) => {
+    if (filters.minAmount && bounty.amount < filters.minAmount) return false;
+    if (filters.maxAmount && bounty.amount > filters.maxAmount) return false;
+    if (filters.difficulty && !filters.difficulty.includes(bounty.difficulty)) return false;
+    if (filters.tags && !filters.tags.some((tag) => bounty.tags.includes(tag))) return false;
+    if (filters.status && !filters.status.includes(bounty.status)) return false;
     return true;
   });
 }
 
 /**
- * 计算平均每笔悬赏收入
+ * 获取推荐的悬赏（前 N 个）
  */
-export function calculateAverageEarning(leader: Leader): number {
-  return Math.round(leader.totalEarned / leader.bountiesCompleted);
-}
-
-/**
- * 格式化货币
- */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+export function getTopBounties(
+  bounties: Bounty[],
+  count: number = 10,
+  config?: RankingConfig
+): ScoredBounty[] {
+  const ranked = rankBounties(bounties, config);
+  return ranked.slice(0, count);
 }
 ```
 
-### 4. 排行榜组件（Leaderboard.tsx）
+### 3. 模拟数据（mockData.ts）
 
 ```typescript
-import React, { useState, useMemo } from 'react';
-import { Leader } from '../types';
-import {
-  sortByTotalEarned,
-  sortByBountiesCompleted,
-  sortByReputation,
-  updateRanks,
-  formatCurrency,
-  calculateAverageEarning,
-} from '../utils';
+import { Bounty } from './types';
 
-interface LeaderboardProps {
-  leaders: Leader[];
-}
+export const mockBounties: Bounty[] = [
+  {
+    id: '1',
+    title: 'Build a reusable Bounty Card component',
+    description: 'Create a reusable card component for displaying bounties',
+    amount: 150,
+    currency: 'USD',
+    difficulty: 'easy',
+    tags: ['React', 'Tailwind CSS', 'UI'],
+    createdAt: new Date('2026-02-15'),
+    deadline: new Date('2026-03-15'),
+    applicantCount: 3,
+    repository: 'gbabaisaac/mergefund-hackathon-kit',
+    status: 'open',
+  },
+  {
+    id: '2',
+    title: 'Implement discovery algorithm',
+    description: 'Build a ranking algorithm for marketplace bounties',
+    amount: 300,
+    currency: 'USD',
+    difficulty: 'medium',
+    tags: ['Algorithm', 'TypeScript', 'Backend'],
+    createdAt: new Date('2026-02-10'),
+    deadline: new Date('2026-03-20'),
+    applicantCount: 5,
+    repository: 'gbabaisaac/mergefund-hackathon-kit',
+    status: 'open',
+  },
+  {
+    id: '3',
+    title: 'Create leaderboard page',
+    description: 'Build a leaderboard page with mock data and sorting',
+    amount: 200,
+    currency: 'USD',
+    difficulty: 'medium',
+    tags: ['React', 'API Integration', 'Sorting'],
+    createdAt: new Date('2026-02-12'),
+    deadline: new Date('2026-03-25'),
+    applicantCount: 2,
+    repository: 'gbabaisaac/mergefund-hackathon-kit',
+    status: 'open',
+  },
+  {
+    id: '4',
+    title: 'Add authentication system',
+    description: 'Implement OAuth2 authentication with GitHub',
+    amount: 500,
+    currency: 'USD',
+    difficulty: 'hard',
+    tags: ['OAuth', 'Security', 'Backend'],
+    createdAt: new Date('2026-02-01'),
+    deadline: new Date('2026-03-10'),
+    applicantCount: 8,
+    repository: 'example/repo',
+    status: 'open',
+  },
+  {
+    id: '5',
+    title: 'Design landing page',
+    description: 'Create a modern landing page with animations',
+    amount: 120,
+    currency: 'EUR',
+    difficulty: 'easy',
+    tags: ['UI/UX', 'Figma', 'CSS'],
+    createdAt: new Date('2026-02-18'),
+    applicantCount: 4,
+    repository: 'example/repo',
+    status: 'open',
+  },
+  {
+    id: '6',
+    title: 'Build notification system',
+    description: 'Real-time notifications using WebSocket',
+    amount: 350,
+    currency: 'USD',
+    difficulty: 'hard',
+    tags: ['WebSocket', 'React', 'Real-time'],
+    createdAt: new Date('2026-02-05'),
+    deadline: new Date('2026-04-01'),
+    applicantCount: 6,
+    repository: 'example/repo',
+    status: 'open',
+  },
+  {
+    id: '7',
+    title: 'Write documentation',
+    description: 'Create comprehensive API documentation',
+    amount: 100,
+    currency: 'USD',
+    difficulty: 'easy',
+    tags: ['Documentation', 'Technical Writing'],
+    createdAt: new Date('2026-02-20'),
+    applicantCount: 1,
+    repository: 'example/repo',
+    status: 'open',
+  },
+  {
+    id: '8',
+    title: 'Optimize database queries',
+    description: 'Improve query performance by 50%',
+    amount: 400,
+    currency: 'USD',
+    difficulty: 'hard',
+    tags: ['Database', 'Performance', 'SQL'],
+    createdAt: new Date('2026-02-08'),
+    deadline: new Date('2026-03-05'),
+    applicantCount: 7,
+    repository: 'example/repo',
+    status: 'open',
+  },
+];
+```
 
-type SortOption = 'totalEarned' | 'bountiesCompleted' | 'reputationScore';
+### 4. 使用示例（App.tsx）
 
-export const Leaderboard: React.FC<LeaderboardProps> = ({ leaders: initialLeaders }) => {
-  const [sortOption, setSortOption] = useState<SortOption>('totalEarned');
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+```typescript
+import React, { useMemo } from 'react';
+import { rankBounties, getTopBounties } from './utils/rankingAlgorithm';
+import { mockBounties } from './data/mockData';
+import './App.css';
 
-  // 排序并更新排名
-  const sortedLeaders = useMemo(() => {
-    let sorted;
+function App() {
+  // 排名所有悬赏
+  const rankedBounties = useMemo(() => rankBounties(mockBounties), []);
 
-    switch (sortOption) {
-      case 'totalEarned':
-        sorted = sortByTotalEarned(initialLeaders);
-        break;
-      case 'bountiesCompleted':
-        sorted = sortByBountiesCompleted(initialLeaders);
-        break;
-      case 'reputationScore':
-        sorted = sortByReputation(initialLeaders);
-        break;
-      default:
-        sorted = sortByTotalEarned(initialLeaders);
-    }
-
-    return updateRanks(sorted);
-  }, [initialLeaders, sortOption]);
-
-  // 获取排名徽章样式
-  const getRankBadge = (rank: number) => {
-    if (rank === 1) return '🥇';
-    if (rank === 2) return '🥈';
-    if (rank === 3) return '🥉';
-    return `#${rank}`;
-  };
-
-  // 获取排名背景色
-  const getRankStyle = (rank: number) => {
-    if (rank === 1) return 'bg-yellow-50 border-yellow-200';
-    if (rank === 2) return 'bg-gray-50 border-gray-200';
-    if (rank === 3) return 'bg-orange-50 border-orange-200';
-    return 'bg-white hover:bg-gray-50';
-  };
+  // 获取前 5 个推荐
+  const topBounties = useMemo(() => getTopBounties(mockBounties, 5), []);
 
   return (
-    <div className="w-full">
-      {/* 排序控制 */}
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">🏆 Leaderboard</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSortOption('totalEarned')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              sortOption === 'totalEarned'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            💰 Total Earned
-          </button>
-          <button
-            onClick={() => setSortOption('bountiesCompleted')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              sortOption === 'bountiesCompleted'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            ✅ Bounties
-          </button>
-          <button
-            onClick={() => setSortOption('reputationScore')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              sortOption === 'reputationScore'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            ⭐ Reputation
-          </button>
-        </div>
-      </div>
+    <div className="App">
+      <h1>🔍 Bounty Discovery Algorithm</h1>
 
-      {/* 排行榜表格 */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+      <section>
+        <h2>🏆 Top 5 Recommended Bounties</h2>
+        {topBounties.map((bounty) => (
+          <div key={bounty.id} className="bounty-card featured">
+            <h3>{bounty.title}</h3>
+            <div className="score">
+              <strong>Score: {bounty.score}/100</strong>
+            </div>
+            <div className="details">
+              <p>💰 ${bounty.amount} ({bounty.difficulty})</p>
+              <p>🏷️ {bounty.tags.join(', ')}</p>
+            </div>
+            <div className="score-breakdown">
+              <small>
+                💵 Amount: {bounty.scoreBreakdown.amountScore} |
+                🎯 Difficulty: {bounty.scoreBreakdown.difficultyScore} |
+                ⏰ Urgency: {bounty.scoreBreakdown.urgencyScore} |
+                🔥 Popularity: {bounty.scoreBreakdown.popularityScore}
+              </small>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section>
+        <h2>📊 All Ranked Bounties</h2>
+        <table>
+          <thead>
             <tr>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Rank</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Contributor</th>
-              <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Total Earned</th>
-              <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Bounties</th>
-              <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Reputation</th>
-              <th className="px-6 py-4 text-right text-sm font-semibold text-gray-900">Avg/Bounty</th>
+              <th>Rank</th>
+              <th>Title</th>
+              <th>Score</th>
+              <th>Amount</th>
+              <th>Difficulty</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
-            {sortedLeaders.map((leader) => (
-              <>
-                <tr
-                  key={leader.id}
-                  className={`cursor-pointer transition-colors ${getRankStyle(leader.rank)} ${
-                    expandedRow === leader.id ? 'border-b-0' : ''
-                  }`}
-                  onClick={() => setExpandedRow(expandedRow === leader.id ? null : leader.id)}
-                >
-                  {/* 排名 */}
-                  <td className="px-6 py-4">
-                    <span className="text-lg font-bold">{getRankBadge(leader.rank)}</span>
-                  </td>
-
-                  {/* 贡献者信息 */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={leader.avatar}
-                        alt={leader.username}
-                        className="w-10 h-10 rounded-full border-2 border-gray-200"
-                      />
-                      <div>
-                        <div className="font-semibold text-gray-900">{leader.username}</div>
-                        <div className="text-sm text-gray-500">
-                          {leader.country} • {leader.skills.slice(0, 2).join(', ')}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* 总收入 */}
-                  <td className="px-6 py-4 text-right">
-                    <div className="font-bold text-green-600">
-                      {formatCurrency(leader.totalEarned)}
-                    </div>
-                  </td>
-
-                  {/* 完成的悬赏数 */}
-                  <td className="px-6 py-4 text-right">
-                    <div className="font-semibold text-gray-900">{leader.bountiesCompleted}</div>
-                  </td>
-
-                  {/* 声望分数 */}
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="font-semibold text-yellow-600">⭐ {leader.reputationScore}</div>
-                    </div>
-                  </td>
-
-                  {/* 平均每笔收入 */}
-                  <td className="px-6 py-4 text-right">
-                    <div className="text-sm text-gray-600">
-                      {formatCurrency(calculateAverageEarning(leader))}
-                    </div>
-                  </td>
-                </tr>
-
-                {/* 展开的详细信息 */}
-                {expandedRow === leader.id && (
-                  <tr className="bg-blue-50">
-                    <td colSpan={6} className="px-6 py-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* 技能 */}
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-2">Skills</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {leader.skills.map((skill) => (
-                              <span
-                                key={skill}
-                                className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full"
-                              >
-                                {skill}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* 最近活动 */}
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-2">Recent Activity</h4>
-                          <ul className="space-y-1">
-                            {leader.recentActivity.map((activity, index) => (
-                              <li key={index} className="text-sm text-gray-600">
-                                • {activity}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* 加入日期 */}
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-2">Member Since</h4>
-                          <p className="text-sm text-gray-600">
-                            {leader.joinedDate.toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
-                          </p>
-                        </div>
-
-                        {/* 统计 */}
-                        <div>
-                          <h4 className="font-semibold text-gray-900 mb-2">Stats</h4>
-                          <p className="text-sm text-gray-600">
-                            Avg per bounty: {formatCurrency(calculateAverageEarning(leader))}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Global ranking: #{leader.rank}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </>
+          <tbody>
+            {rankedBounties.map((bounty, index) => (
+              <tr key={bounty.id}>
+                <td>#{index + 1}</td>
+                <td>{bounty.title}</td>
+                <td>
+                  <strong>{bounty.score}</strong>
+                </td>
+                <td>${bounty.amount}</td>
+                <td>{bounty.difficulty}</td>
+              </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* 底部统计 */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg p-4 border border-gray-200">
-          <div className="text-sm text-gray-600">Total Contributors</div>
-          <div className="text-2xl font-bold text-gray-900">{sortedLeaders.length}</div>
-        </div>
-        <div className="bg-white rounded-lg p-4 border border-gray-200">
-          <div className="text-sm text-gray-600">Total Bounties Completed</div>
-          <div className="text-2xl font-bold text-gray-900">
-            {sortedLeaders.reduce((sum, leader) => sum + leader.bountiesCompleted, 0)}
-          </div>
-        </div>
-        <div className="bg-white rounded-lg p-4 border border-gray-200">
-          <div className="text-sm text-gray-600">Total Earnings</div>
-          <div className="text-2xl font-bold text-green-600">
-            {formatCurrency(sortedLeaders.reduce((sum, leader) => sum + leader.totalEarned, 0))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Leaderboard;
-```
-
-### 5. 使用示例（App.tsx）
-
-```typescript
-import React from 'react';
-import { Leaderboard } from './components/Leaderboard';
-import { mockLeaders } from './data/mockData';
-
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 py-12 px-4">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-8 text-gray-900">
-          🏆 Bounty Leaderboard
-        </h1>
-
-        <Leaderboard leaders={mockLeaders} />
-      </div>
+      </section>
     </div>
   );
 }
 
 export default App;
+```
+
+### 5. 测试文件（rankingAlgorithm.test.ts）
+
+```typescript
+import { rankBounties, getTopBounties, filterBounties } from './rankingAlgorithm';
+import { mockBounties } from '../data/mockData';
+
+describe('Discovery Algorithm', () => {
+  it('should rank bounties by score', () => {
+    const ranked = rankBounties(mockBounties);
+
+    expect(ranked.length).toBe(mockBounties.length);
+    expect(ranked[0].score).toBeGreaterThanOrEqual(ranked[1].score);
+  });
+
+  it('should calculate score breakdown', () => {
+    const ranked = rankBounties(mockBounties);
+
+    ranked.forEach((bounty) => {
+      expect(bounty.scoreBreakdown).toBeDefined();
+      expect(bounty.scoreBreakdown.amountScore).toBeGreaterThanOrEqual(0);
+      expect(bounty.scoreBreakdown.difficultyScore).toBeGreaterThanOrEqual(0);
+      expect(bounty.scoreBreakdown.urgencyScore).toBeGreaterThanOrEqual(0);
+      expect(bounty.scoreBreakdown.popularityScore).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('should get top N bounties', () => {
+    const top5 = getTopBounties(mockBounties, 5);
+
+    expect(top5.length).toBe(5);
+    expect(top5[0].score).toBeGreaterThanOrEqual(top5[4].score);
+  });
+
+  it('should filter bounties by difficulty', () => {
+    const filtered = filterBounties(mockBounties, { difficulty: ['easy'] });
+
+    filtered.forEach((bounty) => {
+      expect(bounty.difficulty).toBe('easy');
+    });
+  });
+
+  it('should filter bounties by amount range', () => {
+    const filtered = filterBounties(mockBounties, {
+      minAmount: 200,
+      maxAmount: 400,
+    });
+
+    filtered.forEach((bounty) => {
+      expect(bounty.amount).toBeGreaterThanOrEqual(200);
+      expect(bounty.amount).toBeLessThanOrEqual(400);
+    });
+  });
+
+  it('should give higher scores to bounties with higher amounts', () => {
+    const ranked = rankBounties(mockBounties);
+    const highAmount = ranked.find((b) => b.amount === 500);
+    const lowAmount = ranked.find((b) => b.amount === 100);
+
+    expect(highAmount?.scoreBreakdown.amountScore).toBeGreaterThan(
+      lowAmount?.scoreBreakdown.amountScore || 0
+    );
+  });
+
+  it('should give higher urgency scores to deadlines sooner', () => {
+    const ranked = rankBounties(mockBounties);
+    const urgent = ranked.find((b) => b.deadline?.getTime() === new Date('2026-03-05').getTime());
+    const notUrgent = ranked.find((b) => !b.deadline);
+
+    expect(urgent?.scoreBreakdown.urgencyScore).toBeGreaterThan(
+      notUrgent?.scoreBreakdown.urgencyScore || 0
+    );
+  });
+});
 ```
 
 ---
@@ -574,53 +510,72 @@ export default App;
 
 ```markdown
 ## Summary
-Implemented a comprehensive leaderboard page with sorting, filtering, and detailed contributor profiles.
+Implemented a comprehensive discovery and ranking algorithm for marketplace bounties with multi-dimensional scoring system.
 
 ## Features
-- ✅ Sortable by total earned, bounties completed, or reputation
-- ✅ Responsive table layout (mobile-friendly)
-- ✅ Click to expand contributor details
-- ✅ Avatar display with country flags
-- ✅ Skills tags
-- ✅ Recent activity feed
-- ✅ Rank badges (🥇🥈🥉 for top 3)
-- ✅ Automatic rank calculation
-- ✅ Statistics dashboard
-- ✅ Average earnings per bounty
-- ✅ Color-coded top 3 positions
+- ✅ Multi-dimensional scoring system (4 factors)
+- ✅ Configurable weight parameters
+- ✅ Detailed score breakdown for transparency
+- ✅ Sorting by total score (0-100)
+- ✅ Filtering capabilities (amount, difficulty, tags, status)
+- ✅ Top N recommendations
+- ✅ Comprehensive unit tests
+- ✅ Extensive code comments explaining algorithm logic
 
-## Sorting Options
-1. **💰 Total Earned** (default) - Shows top earners
-2. **✅ Bounties Completed** - Shows most active contributors
-3. **⭐ Reputation** - Shows highest reputation scores
+## Scoring Algorithm
 
-## Responsive Design
-- Mobile: Horizontal scroll + stacked details
-- Tablet: Full table with responsive columns
-- Desktop: Full table with hover effects
+The algorithm evaluates bounties based on 4 dimensions (0-100 total):
 
-## Visual Features
-- Gold/Silver/Bronze highlighting for top 3
-- Smooth expand/collapse animations
-- Hover effects on rows
-- Professional color scheme
-- Clear typography hierarchy
+1. **💰 Amount Score (0-25):** log10(amount) * 5
+   - Higher bounties score higher
+   - Logarithmic scale prevents massive bounties from dominating
+
+2. **🎯 Difficulty Score (0-25):**
+   - Easy: 5 points
+   - Medium: 15 points
+   - Hard: 25 points
+
+3. **⏰ Urgency Score (0-25):**
+   - ≤7 days to deadline: 25 points
+   - ≤30 days: 15 points
+   - >30 days or no deadline: 5 points
+
+4. **🔥 Popularity Score (0-25):** min(applicantCount * 2, 25)
+   - More applicants = more popular
+
+### Default Weights:
+- Amount: 30%
+- Difficulty: 25%
+- Urgency: 25%
+- Popularity: 20%
 
 ## Files Added
-- `src/types.ts` - Type definitions
-- `src/data/mockData.ts` - Mock leaderboard data
-- `src/utils.ts` - Sorting and filtering utilities
-- `src/components/Leaderboard.tsx` - Main leaderboard component
+- `src/types.ts` - TypeScript type definitions
+- `src/utils/rankingAlgorithm.ts` - Main ranking algorithm with detailed comments
+- `src/data/mockData.ts` - Mock bounty data
 - `src/App.tsx` - Demo implementation
+- `src/utils/__tests__/rankingAlgorithm.test.ts` - Unit tests
 
 ## Testing
-Manual testing performed:
-- ✅ Sorting by all 3 options works correctly
-- ✅ Rank updates automatically when sorting changes
-- ✅ Expand/collapse functionality works
-- ✅ Responsive layout tested on mobile/tablet/desktop
-- ✅ All calculations accurate (averages, totals)
-- ✅ Mock data displays correctly
+All tests passing:
+```bash
+npm test
+```
+
+Test coverage:
+- Ranking by score ✅
+- Score breakdown calculation ✅
+- Top N selection ✅
+- Filtering by difficulty ✅
+- Filtering by amount range ✅
+- Amount score correlation ✅
+- Urgency score correlation ✅
+
+## Demo
+- Top 5 recommended bounties displayed
+- Full ranked list with scores
+- Score breakdown shown for transparency
+- Filter examples provided
 ```
 
 ---
